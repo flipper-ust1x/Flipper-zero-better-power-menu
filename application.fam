@@ -1,0 +1,10 @@
+App(
+    appid="power_menu",
+    name="Power Menu",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="power_menu_app",
+    stack_size=1024,
+    fap_category="System",
+    resources="resources",
+    icon="A_Plugins_14",
+)
