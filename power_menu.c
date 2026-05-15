@@ -1,208 +1,58 @@
 #include <furi.h>
 #include <furi_hal.h>
 #include <gui/gui.h>
-#include <gui/elements.h>
-#include <gui/view.h>
 #include <gui/view_dispatcher.h>
-#include <input/input.h>
-
-// Application state
-typedef enum {
-    PowerMenuItemRestart,
-    PowerMenuItemRestartDFU,
-    PowerMenuItemShutdown,
-    PowerMenuItemCount,
-} PowerMenuItem;
-
-typedef enum {
-    PowerMenuStateMenu,
-    PowerMenuStateConfirmRestart,
-    PowerMenuStateConfirmRestartDFU,
-    PowerMenuStateConfirmShutdown,
-} PowerMenuState;
+#include <gui/modules/menu.h>
 
 typedef struct {
-    PowerMenuState state;
-    PowerMenuItem selected_item;
-    View* view;
     ViewDispatcher* view_dispatcher;
+    Menu* menu;
     Gui* gui;
-    FuriMutex* mutex;
 } PowerMenuApp;
 
-// Menu item strings
-static const char* menu_items[PowerMenuItemCount] = {
-    "Restart",
-    "Restart in DFU",
-    "Shutdown",
-};
-
-// Draw callback for menu
-static void power_menu_draw_menu(Canvas* canvas, PowerMenuApp* app) {
-    canvas_clear(canvas);
+static void power_menu_menu_callback(void* context, uint32_t index) {
+    PowerMenuApp* app = (PowerMenuApp*)context;
     
-    // Header
-    canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str_aligned(canvas, 64, 2, AlignCenter, AlignTop, "Power Menu");
-    
-    canvas_set_color(canvas, ColorBlack);
-    canvas_draw_line(canvas, 0, 15, 128, 15);
-    
-    // Menu items
-    canvas_set_font(canvas, FontSecondary);
-    for (uint8_t i = 0; i < PowerMenuItemCount; i++) {
-        int y = 22 + (i * 18);
-        
-        if (i == app->selected_item) {
-            // Draw selection box
-            canvas_draw_box(canvas, 5, y - 2, 118, 16);
-            canvas_set_color(canvas, ColorWhite);
-            canvas_draw_str(canvas, 10, y + 10, menu_items[i]);
-            canvas_set_color(canvas, ColorBlack);
-        } else {
-            canvas_draw_str(canvas, 10, y + 10, menu_items[i]);
-        }
-    }
-    
-    // Footer
-    canvas_set_font(canvas, FontSecondary);
-    canvas_draw_str_aligned(canvas, 2, 62, AlignLeft, AlignBottom, "UP/DOWN");
-    canvas_draw_str_aligned(canvas, 126, 62, AlignRight, AlignBottom, "OK");
-}
-
-// Draw callback for confirmation dialogs
-static void power_menu_draw_confirm(Canvas* canvas, PowerMenuApp* app, const char* title, const char* message) {
-    UNUSED(app);
-    canvas_clear(canvas);
-    
-    canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str_aligned(canvas, 64, 10, AlignCenter, AlignTop, title);
-    
-    canvas_set_color(canvas, ColorBlack);
-    canvas_draw_line(canvas, 0, 24, 128, 24);
-    
-    canvas_set_font(canvas, FontSecondary);
-    canvas_draw_str_aligned(canvas, 64, 35, AlignCenter, AlignCenter, message);
-    
-    canvas_draw_str_aligned(canvas, 2, 62, AlignLeft, AlignBottom, "NO");
-    canvas_draw_str_aligned(canvas, 126, 62, AlignRight, AlignBottom, "YES");
-}
-
-// Main draw callback
-static void power_menu_draw_callback(Canvas* canvas, void* ctx) {
-    PowerMenuApp* app = (PowerMenuApp*)ctx;
-    furi_mutex_acquire(app->mutex, FuriWaitForever);
-    
-    switch (app->state) {
-        case PowerMenuStateMenu:
-            power_menu_draw_menu(canvas, app);
+    switch (index) {
+        case 0:
+            // Restart
+            furi_hal_power_reset();
             break;
-        case PowerMenuStateConfirmRestart:
-            power_menu_draw_confirm(canvas, app, "Restart?", "Are you sure?");
+        case 1:
+            // Restart in DFU
+            furi_hal_bootloader_go_to_dfu_mode();
+            furi_hal_power_reset();
             break;
-        case PowerMenuStateConfirmRestartDFU:
-            power_menu_draw_confirm(canvas, app, "Restart in DFU?", "Boot into bootloader?");
-            break;
-        case PowerMenuStateConfirmShutdown:
-            power_menu_draw_confirm(canvas, app, "Shutdown?", "Power off Flipper?");
+        case 2:
+            // Shutdown
+            furi_hal_power_off();
             break;
     }
-    
-    furi_mutex_release(app->mutex);
 }
 
-// Input callback
-static void power_menu_input_callback(InputEvent* input_event, void* ctx) {
-    furi_assert(ctx);
-    PowerMenuApp* app = (PowerMenuApp*)ctx;
-    
-    if (input_event->type != InputTypePress) {
-        return;
-    }
-    
-    furi_mutex_acquire(app->mutex, FuriWaitForever);
-    
-    if (app->state == PowerMenuStateMenu) {
-        // Menu navigation
-        if (input_event->key == InputKeyUp) {
-            if (app->selected_item > 0) {
-                app->selected_item--;
-            }
-        } else if (input_event->key == InputKeyDown) {
-            if (app->selected_item < PowerMenuItemCount - 1) {
-                app->selected_item++;
-            }
-        } else if (input_event->key == InputKeyOk) {
-            // Enter confirmation state based on selection
-            if (app->selected_item == PowerMenuItemRestart) {
-                app->state = PowerMenuStateConfirmRestart;
-            } else if (app->selected_item == PowerMenuItemRestartDFU) {
-                app->state = PowerMenuStateConfirmRestartDFU;
-            } else if (app->selected_item == PowerMenuItemShutdown) {
-                app->state = PowerMenuStateConfirmShutdown;
-            }
-        } else if (input_event->key == InputKeyBack) {
-            // Exit app
-            furi_mutex_release(app->mutex);
-            view_dispatcher_stop(app->view_dispatcher);
-            return;
-        }
-    } else {
-        // Confirmation states
-        if (input_event->key == InputKeyLeft || input_event->key == InputKeyBack) {
-            // Cancel - go back to menu
-            app->state = PowerMenuStateMenu;
-        } else if (input_event->key == InputKeyRight || input_event->key == InputKeyOk) {
-            // Confirm action
-            furi_mutex_release(app->mutex);
-            
-            if (app->state == PowerMenuStateConfirmRestart) {
-                furi_hal_power_reset();
-            } else if (app->state == PowerMenuStateConfirmRestartDFU) {
-                furi_hal_bootloader_go_to_dfu_mode();
-                furi_hal_power_reset();
-            } else if (app->state == PowerMenuStateConfirmShutdown) {
-                furi_hal_power_off();
-            }
-            return;
-        }
-    }
-    
-    furi_mutex_release(app->mutex);
-}
-
-// App entry point
 int32_t power_menu_app(void* p) {
     UNUSED(p);
     
     PowerMenuApp* app = furi_alloc(sizeof(PowerMenuApp));
-    app->state = PowerMenuStateMenu;
-    app->selected_item = PowerMenuItemRestart;
-    app->mutex = furi_mutex_alloc(FuriMutexTypeNormal);
     
-    // Open GUI
     app->gui = furi_record_open(RECORD_GUI);
     
-    // Create view and view dispatcher
-    app->view = view_alloc();
-    view_set_draw_callback(app->view, power_menu_draw_callback);
-    view_set_input_callback(app->view, power_menu_input_callback);
-    view_set_context(app->view, app);
-    
     app->view_dispatcher = view_dispatcher_alloc();
-    view_dispatcher_add_view(app->view_dispatcher, 0, app->view);
     view_dispatcher_attach_to_gui(app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
-    view_dispatcher_switch_to_view(app->view_dispatcher, 0);
     
-    // Run the app
+    app->menu = menu_alloc();
+    menu_add_item(app->menu, "Restart", NULL, 0, power_menu_menu_callback, app);
+    menu_add_item(app->menu, "Restart DFU", NULL, 1, power_menu_menu_callback, app);
+    menu_add_item(app->menu, "Shutdown", NULL, 2, power_menu_menu_callback, app);
+    
+    view_dispatcher_add_view(app->view_dispatcher, 0, menu_get_view(app->menu));
+    view_dispatcher_switch_to_view(app->view_dispatcher, 0);
     view_dispatcher_run(app->view_dispatcher);
     
-    // Cleanup
     view_dispatcher_remove_view(app->view_dispatcher, 0);
     view_dispatcher_free(app->view_dispatcher);
-    view_free(app->view);
+    menu_free(app->menu);
     furi_record_close(RECORD_GUI);
-    furi_mutex_free(app->mutex);
     furi_free(app);
     
     return 0;
