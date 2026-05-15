@@ -3,8 +3,8 @@
 #include <gui/gui.h>
 #include <gui/elements.h>
 #include <gui/view.h>
+#include <gui/view_dispatcher.h>
 #include <input/input.h>
-#include <stdlib.h>
 
 // Application state
 typedef enum {
@@ -27,6 +27,7 @@ typedef struct {
     View* view;
     ViewDispatcher* view_dispatcher;
     Gui* gui;
+    FuriMutex* mutex;
 } PowerMenuApp;
 
 // Menu item strings
@@ -49,7 +50,7 @@ static void power_menu_draw_menu(Canvas* canvas, PowerMenuApp* app) {
     
     // Menu items
     canvas_set_font(canvas, FontSecondary);
-    for (int i = 0; i < PowerMenuItemCount; i++) {
+    for (uint8_t i = 0; i < PowerMenuItemCount; i++) {
         int y = 22 + (i * 18);
         
         if (i == app->selected_item) {
@@ -71,6 +72,7 @@ static void power_menu_draw_menu(Canvas* canvas, PowerMenuApp* app) {
 
 // Draw callback for confirmation dialogs
 static void power_menu_draw_confirm(Canvas* canvas, PowerMenuApp* app, const char* title, const char* message) {
+    UNUSED(app);
     canvas_clear(canvas);
     
     canvas_set_font(canvas, FontPrimary);
@@ -89,6 +91,7 @@ static void power_menu_draw_confirm(Canvas* canvas, PowerMenuApp* app, const cha
 // Main draw callback
 static void power_menu_draw_callback(Canvas* canvas, void* ctx) {
     PowerMenuApp* app = (PowerMenuApp*)ctx;
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
     
     switch (app->state) {
         case PowerMenuStateMenu:
@@ -104,6 +107,8 @@ static void power_menu_draw_callback(Canvas* canvas, void* ctx) {
             power_menu_draw_confirm(canvas, app, "Shutdown?", "Power off Flipper?");
             break;
     }
+    
+    furi_mutex_release(app->mutex);
 }
 
 // Input callback
@@ -114,6 +119,8 @@ static void power_menu_input_callback(InputEvent* input_event, void* ctx) {
     if (input_event->type != InputTypePress) {
         return;
     }
+    
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
     
     if (app->state == PowerMenuStateMenu) {
         // Menu navigation
@@ -136,7 +143,9 @@ static void power_menu_input_callback(InputEvent* input_event, void* ctx) {
             }
         } else if (input_event->key == InputKeyBack) {
             // Exit app
+            furi_mutex_release(app->mutex);
             view_dispatcher_stop(app->view_dispatcher);
+            return;
         }
     } else {
         // Confirmation states
@@ -145,6 +154,8 @@ static void power_menu_input_callback(InputEvent* input_event, void* ctx) {
             app->state = PowerMenuStateMenu;
         } else if (input_event->key == InputKeyRight || input_event->key == InputKeyOk) {
             // Confirm action
+            furi_mutex_release(app->mutex);
+            
             if (app->state == PowerMenuStateConfirmRestart) {
                 furi_hal_power_reset();
             } else if (app->state == PowerMenuStateConfirmRestartDFU) {
@@ -153,17 +164,21 @@ static void power_menu_input_callback(InputEvent* input_event, void* ctx) {
             } else if (app->state == PowerMenuStateConfirmShutdown) {
                 furi_hal_power_off();
             }
+            return;
         }
     }
+    
+    furi_mutex_release(app->mutex);
 }
 
 // App entry point
 int32_t power_menu_app(void* p) {
     UNUSED(p);
     
-    PowerMenuApp* app = malloc(sizeof(PowerMenuApp));
+    PowerMenuApp* app = furi_alloc(sizeof(PowerMenuApp));
     app->state = PowerMenuStateMenu;
     app->selected_item = PowerMenuItemRestart;
+    app->mutex = furi_mutex_alloc(FuriMutexTypeNormal);
     
     // Open GUI
     app->gui = furi_record_open(RECORD_GUI);
@@ -187,7 +202,8 @@ int32_t power_menu_app(void* p) {
     view_dispatcher_free(app->view_dispatcher);
     view_free(app->view);
     furi_record_close(RECORD_GUI);
-    free(app);
+    furi_mutex_free(app->mutex);
+    furi_free(app);
     
     return 0;
 }
