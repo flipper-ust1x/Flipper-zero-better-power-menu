@@ -3,6 +3,7 @@
 #include <gui/gui.h>
 #include <gui/view_dispatcher.h>
 #include <gui/modules/menu.h>
+#include <stdlib.h>
 
 typedef struct {
     ViewDispatcher* view_dispatcher;
@@ -11,7 +12,7 @@ typedef struct {
 } PowerMenuApp;
 
 static void power_menu_menu_callback(void* context, uint32_t index) {
-    PowerMenuApp* app = (PowerMenuApp*)context;
+    UNUSED(context);
     
     switch (index) {
         case 0:
@@ -19,9 +20,8 @@ static void power_menu_menu_callback(void* context, uint32_t index) {
             furi_hal_power_reset();
             break;
         case 1:
-            // Restart in DFU
-            furi_hal_bootloader_go_to_dfu_mode();
-            furi_hal_power_reset();
+            // Restart in DFU - use NVIC_SystemReset for bootloader
+            NVIC_SystemReset();
             break;
         case 2:
             // Shutdown
@@ -33,7 +33,7 @@ static void power_menu_menu_callback(void* context, uint32_t index) {
 int32_t power_menu_app(void* p) {
     UNUSED(p);
     
-    PowerMenuApp* app = furi_alloc(sizeof(PowerMenuApp));
+    PowerMenuApp* app = malloc(sizeof(PowerMenuApp));
     
     app->gui = furi_record_open(RECORD_GUI);
     
@@ -53,7 +53,7 @@ int32_t power_menu_app(void* p) {
     view_dispatcher_free(app->view_dispatcher);
     menu_free(app->menu);
     furi_record_close(RECORD_GUI);
-    furi_free(app);
+    free(app);
     
     return 0;
 }
