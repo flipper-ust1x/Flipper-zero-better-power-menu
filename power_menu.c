@@ -16,12 +16,12 @@ static void power_menu_menu_callback(void* context, uint32_t index) {
     switch (index) {
         case 0:
             // Restart
-            void furi_hal_speaker_start(300, 1);
+            void furi_hal_speaker_start(float 300, float 1);
             furi_hal_power_reset();
             break;
         case 2:
             // Shutdown
-            void furi_hal_speaker_start(300, 1);
+            void furi_hal_speaker_start(float 300, float 1);
             furi_hal_power_off();
             break;
     }
