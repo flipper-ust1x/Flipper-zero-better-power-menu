@@ -19,10 +19,6 @@ static void power_menu_menu_callback(void* context, uint32_t index) {
             // Restart
             furi_hal_power_reset();
             break;
-        case 1:
-            // Restart in DFU - use NVIC_SystemReset for bootloader
-            NVIC_SystemReset();
-            break;
         case 2:
             // Shutdown
             furi_hal_power_off();
@@ -41,9 +37,8 @@ int32_t power_menu_app(void* p) {
     view_dispatcher_attach_to_gui(app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
     
     app->menu = menu_alloc();
-    menu_add_item(app->menu, "Restart", NULL, 0, power_menu_menu_callback, app);
-    menu_add_item(app->menu, "Restart DFU", NULL, 1, power_menu_menu_callback, app);
-    menu_add_item(app->menu, "Shutdown", NULL, 2, power_menu_menu_callback, app);
+    menu_add_item(app->menu, "RESTART", NULL, 0, power_menu_menu_callback, app);
+    menu_add_item(app->menu, "SHUTDOWN", NULL, 2, power_menu_menu_callback, app);
     
     view_dispatcher_add_view(app->view_dispatcher, 0, menu_get_view(app->menu));
     view_dispatcher_switch_to_view(app->view_dispatcher, 0);
