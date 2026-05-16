@@ -16,12 +16,10 @@ static void power_menu_menu_callback(void* context, uint32_t index) {
     switch (index) {
         case 0:
             // Restart
-            void furi_hal_speaker_start (float 300, float 1);
             furi_hal_power_reset();
             break;
         case 2:
             // Shutdown
-            void furi_hal_speaker_start (float 300, float 1);
             furi_hal_power_off();
             break;
     }
@@ -38,8 +36,8 @@ int32_t power_menu_app(void* p) {
     view_dispatcher_attach_to_gui(app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
     
     app->menu = menu_alloc();
-    menu_add_item(app->menu, "RESTART", NULL, 0, power_menu_menu_callback, app);
-    menu_add_item(app->menu, "SHUTDOWN", NULL, 2, power_menu_menu_callback, app);
+    menu_add_item(app->menu, "Restart", NULL, 0, power_menu_menu_callback, app);
+    menu_add_item(app->menu, "Shutdown", NULL, 2, power_menu_menu_callback, app);
     
     view_dispatcher_add_view(app->view_dispatcher, 0, menu_get_view(app->menu));
     view_dispatcher_switch_to_view(app->view_dispatcher, 0);
