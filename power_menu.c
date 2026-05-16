@@ -1,77 +1,151 @@
 #include <furi.h>
 #include <furi_hal.h>
+
 #include <gui/gui.h>
-#include <gui/view_dispatcher.h>
 #include <gui/view.h>
+#include <gui/view_dispatcher.h>
+
 #include <input/input.h>
-#include <assets_icons.h>
+
 #include <stdlib.h>
 
 typedef struct {
+    Gui* gui;
     ViewDispatcher* view_dispatcher;
     View* view;
-    Gui* gui;
 
     uint8_t selected;
-    uint8_t anim_offset;
 } PowerMenuApp;
 
-static void power_menu_draw_callback(Canvas* canvas, void* context) {
+static void power_menu_draw(Canvas* canvas, void* context) {
     PowerMenuApp* app = context;
 
     canvas_clear(canvas);
 
-    // Header
+    // ===== HEADER =====
+
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str(canvas, 28, 12, "SYSTEM POWER");
+    canvas_draw_str(canvas, 8, 12, "POWER CONTROL");
 
-    // Divider
-    canvas_draw_line(canvas, 8, 16, 120, 16);
+    canvas_draw_line(canvas, 0, 16, 127, 16);
 
-    // Battery icon area
-    canvas_draw_icon(canvas, 8, 2, &I_BatteryBody_52x28);
-
-    // Restart Button
-    uint8_t restart_y = 24;
+    // ===== RESTART =====
 
     if(app->selected == 0) {
-        canvas_draw_box(canvas, 6, restart_y, 116, 18);
+        canvas_draw_box(canvas, 4, 22, 120, 18);
+
         canvas_set_color(canvas, ColorWhite);
-        canvas_draw_icon(canvas, 12, restart_y + 1, &I_Restart_19x20);
-        canvas_draw_str(canvas, 42, restart_y + 12, "Restart Device");
+        canvas_draw_str(canvas, 12, 35, "> Restart Device");
+
         canvas_set_color(canvas, ColorBlack);
     } else {
-        canvas_draw_frame(canvas, 6, restart_y, 116, 18);
-        canvas_draw_icon(canvas, 12, restart_y + 1, &I_Restart_19x20);
-        canvas_draw_str(canvas, 42, restart_y + 12, "Restart Device");
+        canvas_draw_frame(canvas, 4, 22, 120, 18);
+
+        canvas_draw_str(canvas, 12, 35, "  Restart Device");
     }
 
-    // Shutdown Button
-    uint8_t shutdown_y = 47;
+    // ===== SHUTDOWN =====
 
     if(app->selected == 1) {
-        canvas_draw_box(canvas, 6, shutdown_y, 116, 18);
+        canvas_draw_box(canvas, 4, 45, 120, 18);
+
         canvas_set_color(canvas, ColorWhite);
-        canvas_draw_icon(canvas, 12, shutdown_y + 1, &I_Power_25x27);
-        canvas_draw_str(canvas, 42, shutdown_y + 12, "Shutdown");
+        canvas_draw_str(canvas, 12, 58, "> Shutdown");
+
         canvas_set_color(canvas, ColorBlack);
     } else {
-        canvas_draw_frame(canvas, 6, shutdown_y, 116, 18);
-        canvas_draw_icon(canvas, 12, shutdown_y + 1, &I_Power_25x27);
-        canvas_draw_str(canvas, 42, shutdown_y + 12, "Shutdown");
+        canvas_draw_frame(canvas, 4, 45, 120, 18);
+
+        canvas_draw_str(canvas, 12, 58, "  Shutdown");
     }
 
-    // Footer hints
+    // ===== FOOTER =====
+
     canvas_set_font(canvas, FontSecondary);
-    canvas_draw_str(canvas, 8, 62, "UP/DOWN Navigate");
-    canvas_draw_str(canvas, 88, 62, "OK Select");
+
+    canvas_draw_str(canvas, 4, 64, "UP/DOWN Navigate");
 }
 
-static bool power_menu_input_callback(InputEvent* event, void* context) {
+static bool power_menu_input(InputEvent* event, void* context) {
     PowerMenuApp* app = context;
 
     if(event->type != InputTypePress) {
         return false;
     }
 
+    switch(event->key) {
+    case InputKeyUp:
+        if(app->selected > 0) {
+            app->selected--;
+        }
+        break;
+
+    case InputKeyDown:
+        if(app->selected < 1) {
+            app->selected++;
+        }
+        break;
+
+    case InputKeyOk:
+        if(app->selected == 0) {
+            furi_hal_power_reset();
+        } else if(app->selected == 1) {
+            furi_hal_power_off();
+        }
+        break;
+
+    case InputKeyBack:
+        view_dispatcher_stop(app->view_dispatcher);
+        break;
+
+    default:
+        break;
+    }
+
+    view_dispatcher_switch_to_view(app->view_dispatcher, 0);
+
+    return true;
+}
+
+int32_t power_menu_app(void* p) {
+    UNUSED(p);
+
+    PowerMenuApp* app = malloc(sizeof(PowerMenuApp));
+
+    app->selected = 0;
+
+    app->gui = furi_record_open(RECORD_GUI);
+
+    app->view_dispatcher = view_dispatcher_alloc();
+
+    view_dispatcher_attach_to_gui(
+        app->view_dispatcher,
+        app->gui,
+        ViewDispatcherTypeFullscreen);
+
+    app->view = view_alloc();
+
+    view_set_context(app->view, app);
+
+    view_set_draw_callback(app->view, power_menu_draw);
+
+    view_set_input_callback(app->view, power_menu_input);
+
+    view_dispatcher_add_view(app->view_dispatcher, 0, app->view);
+
+    view_dispatcher_switch_to_view(app->view_dispatcher, 0);
+
+    view_dispatcher_run(app->view_dispatcher);
+
+    view_dispatcher_remove_view(app->view_dispatcher, 0);
+
+    view_free(app->view);
+
+    view_dispatcher_free(app->view_dispatcher);
+
+    furi_record_close(RECORD_GUI);
+
+    free(app);
+
+    return 0;
 }
