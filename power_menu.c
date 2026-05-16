@@ -25,13 +25,13 @@ typedef struct {
 
 static void play_click(NotificationApp* n) {
     if(n) {
-        notification_message(n, &message_click);
+        notification_message(n, &sequence_blink_blue_100);
     }
 }
 
 static void play_confirm(NotificationApp* n) {
     if(n) {
-        notification_message(n, &message_success);
+        notification_message(n, &sequence_blink_green_100);
     }
 }
 
@@ -41,8 +41,10 @@ static void draw_battery(Canvas* canvas) {
     uint8_t level = furi_hal_power_get_battery_remaining_capacity();
     if(level > 100) level = 100;
 
+    // outline
     canvas_draw_frame(canvas, 90, 2, 34, 8);
 
+    // fill
     uint8_t fill = (level * 32) / 100;
     canvas_draw_box(canvas, 91, 3, fill, 6);
 }
@@ -51,18 +53,19 @@ static void draw_battery(Canvas* canvas) {
 
 static void power_menu_draw(Canvas* canvas, void* context) {
     PowerMenuApp* app = context;
+
     if(!app || !canvas) return;
 
     canvas_clear(canvas);
 
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str(canvas, 8, 12, "POWER CONTROL");
+    canvas_draw_str(canvas, 8, 12, "POWER MENU");
 
     draw_battery(canvas);
 
     canvas_draw_line(canvas, 0, 16, 127, 16);
 
-    /* ---- Restart ---- */
+    /* ---------- RESTART ---------- */
 
     if(app->selected == 0) {
         canvas_draw_box(canvas, 4, 22, 120, 18);
@@ -74,7 +77,7 @@ static void power_menu_draw(Canvas* canvas, void* context) {
         canvas_draw_str(canvas, 12, 35, "  Restart");
     }
 
-    /* ---- Shutdown ---- */
+    /* ---------- SHUTDOWN ---------- */
 
     if(app->selected == 1) {
         canvas_draw_box(canvas, 4, 45, 120, 18);
@@ -87,7 +90,7 @@ static void power_menu_draw(Canvas* canvas, void* context) {
     }
 
     canvas_set_font(canvas, FontSecondary);
-    canvas_draw_str(canvas, 4, 64, "OK Select | BACK Exit");
+    canvas_draw_str(canvas, 4, 64, "OK=Select  BACK=Exit");
 }
 
 /* ================= INPUT ================= */
@@ -129,8 +132,9 @@ static bool power_menu_input(InputEvent* event, void* context) {
         break;
     }
 
-    /* SAFE REDRAW (no deprecated viewport calls) */
-    view_dispatcher_update(app->view_dispatcher);
+    /* SAFE REDRAW FOR MOMENTUM */
+    view_dispatcher_switch_to_view(app->view_dispatcher, 0);
+
     return true;
 }
 
@@ -160,11 +164,13 @@ int32_t power_menu_app(void* p) {
     view_set_input_callback(app->view, power_menu_input);
 
     view_dispatcher_add_view(app->view_dispatcher, 0, app->view);
+
     view_dispatcher_switch_to_view(app->view_dispatcher, 0);
 
     view_dispatcher_run(app->view_dispatcher);
 
-    /* CLEANUP */
+    /* ================= CLEANUP ================= */
+
     view_dispatcher_remove_view(app->view_dispatcher, 0);
     view_free(app->view);
     view_dispatcher_free(app->view_dispatcher);
