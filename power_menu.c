@@ -21,21 +21,24 @@ typedef struct {
     uint8_t selected;
 } PowerMenuApp;
 
-/* ===================== SOUND ===================== */
+/* ================= SOUND ================= */
 
 static void play_click(NotificationApp* n) {
-    if(n) notification_message(n, &sequence_click);
+    if(n) {
+        notification_message(n, &message_click);
+    }
 }
 
 static void play_confirm(NotificationApp* n) {
-    if(n) notification_message(n, &sequence_success);
+    if(n) {
+        notification_message(n, &message_success);
+    }
 }
 
-/* ===================== BATTERY ===================== */
+/* ================= BATTERY ================= */
 
 static void draw_battery(Canvas* canvas) {
     uint8_t level = furi_hal_power_get_battery_remaining_capacity();
-
     if(level > 100) level = 100;
 
     canvas_draw_frame(canvas, 90, 2, 34, 8);
@@ -44,11 +47,10 @@ static void draw_battery(Canvas* canvas) {
     canvas_draw_box(canvas, 91, 3, fill, 6);
 }
 
-/* ===================== DRAW ===================== */
+/* ================= DRAW ================= */
 
 static void power_menu_draw(Canvas* canvas, void* context) {
     PowerMenuApp* app = context;
-
     if(!app || !canvas) return;
 
     canvas_clear(canvas);
@@ -60,7 +62,7 @@ static void power_menu_draw(Canvas* canvas, void* context) {
 
     canvas_draw_line(canvas, 0, 16, 127, 16);
 
-    /* ---------- RESTART ---------- */
+    /* ---- Restart ---- */
 
     if(app->selected == 0) {
         canvas_draw_box(canvas, 4, 22, 120, 18);
@@ -72,7 +74,7 @@ static void power_menu_draw(Canvas* canvas, void* context) {
         canvas_draw_str(canvas, 12, 35, "  Restart");
     }
 
-    /* ---------- SHUTDOWN ---------- */
+    /* ---- Shutdown ---- */
 
     if(app->selected == 1) {
         canvas_draw_box(canvas, 4, 45, 120, 18);
@@ -85,10 +87,10 @@ static void power_menu_draw(Canvas* canvas, void* context) {
     }
 
     canvas_set_font(canvas, FontSecondary);
-    canvas_draw_str(canvas, 4, 64, "OK=Select  BACK=Exit");
+    canvas_draw_str(canvas, 4, 64, "OK Select | BACK Exit");
 }
 
-/* ===================== INPUT ===================== */
+/* ================= INPUT ================= */
 
 static bool power_menu_input(InputEvent* event, void* context) {
     PowerMenuApp* app = context;
@@ -127,11 +129,12 @@ static bool power_menu_input(InputEvent* event, void* context) {
         break;
     }
 
-    view_port_update(view_get_view_port(app->view));
+    /* SAFE REDRAW (no deprecated viewport calls) */
+    view_dispatcher_update(app->view_dispatcher);
     return true;
 }
 
-/* ===================== APP ENTRY ===================== */
+/* ================= APP ================= */
 
 int32_t power_menu_app(void* p) {
     UNUSED(p);
@@ -150,8 +153,6 @@ int32_t power_menu_app(void* p) {
         app->gui,
         ViewDispatcherTypeFullscreen);
 
-    view_dispatcher_enable_queue(app->view_dispatcher);
-
     app->view = view_alloc();
 
     view_set_context(app->view, app);
@@ -163,8 +164,7 @@ int32_t power_menu_app(void* p) {
 
     view_dispatcher_run(app->view_dispatcher);
 
-    /* ===================== CLEANUP ===================== */
-
+    /* CLEANUP */
     view_dispatcher_remove_view(app->view_dispatcher, 0);
     view_free(app->view);
     view_dispatcher_free(app->view_dispatcher);
